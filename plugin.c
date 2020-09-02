@@ -2,7 +2,6 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
-#include <stdbool.h>
 #include "common_types.h"
 
 #ifdef _WIN32
