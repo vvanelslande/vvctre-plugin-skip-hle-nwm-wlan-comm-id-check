@@ -23,9 +23,9 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           if [ "$RUNNER_OS" == "Windows" ]; then
-            cl.exe //LD //Fe:${{github.event.repository.name}}.dll plugin.c
+            cl.exe //LD //Fe:always-return-true-in-the-wlan-comm-id-check.dll plugin.c
           else
-            gcc plugin.c -shared -o ${{github.event.repository.name}}.so
+            gcc plugin.c -shared -o always-return-true-in-the-wlan-comm-id-check.so
           fi
       - name: Prepare to upload
         if: github.event_name == 'push'
@@ -35,22 +35,22 @@ jobs:
           export VERSION=${GITHUB_REF:10}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           if [ "$RUNNER_OS" == "Windows" ]; then
-            7z a ${{github.event.repository.name}}-$VERSION-${{runner.os}}.7z ${{github.event.repository.name}}.dll license.txt
+            7z a vvctre-plugin-always-return-true-in-the-wlan-comm-id-check-$VERSION-${{runner.os}}.7z always-return-true-in-the-wlan-comm-id-check.dll license.txt
           else
-            7z a ${{github.event.repository.name}}-$VERSION-${{runner.os}}.7z ${{github.event.repository.name}}.so license.txt
+            7z a vvctre-plugin-always-return-true-in-the-wlan-comm-id-check-$VERSION-${{runner.os}}.7z always-return-true-in-the-wlan-comm-id-check.so license.txt
           fi
       - name: Upload to GitHub Releases
         if: github.event_name == 'push'
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{secrets.GITHUB_TOKEN}}
-          file: ${{github.event.repository.name}}-${{env.VERSION}}-${{runner.os}}.7z
-          asset_name: ${{github.event.repository.name}}-${{env.VERSION}}-${{runner.os}}.7z
+          file: vvctre-plugin-always-return-true-in-the-wlan-comm-id-check-${{env.VERSION}}-${{runner.os}}.7z
+          asset_name: vvctre-plugin-always-return-true-in-the-wlan-comm-id-check-${{env.VERSION}}-${{runner.os}}.7z
           tag: ${{github.ref}}
           overwrite: true
       - name: Upload artifact
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v1
         with:
-          name: ${{github.event.repository.name}}-${{runner.os}}
+          name: vvctre-plugin-always-return-true-in-the-wlan-comm-id-check-${{runner.os}}
           path: .
