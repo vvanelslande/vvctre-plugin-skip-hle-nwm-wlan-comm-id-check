@@ -3,17 +3,23 @@ name: CI
 on:
   push:
     tags:
-      - "*"
+      - '*'
   pull_request:
     branches:
-      - "*"
+      - '*'
 
 jobs:
   build:
+    name: ${{matrix.name}}
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
         os: [windows-2019, ubuntu-18.04]
+        include:
+          - os: windows-2019
+            name: windows
+          - os: ubuntu-18.04
+            name: linux
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -23,34 +29,97 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           if [ "$RUNNER_OS" == "Windows" ]; then
-            cl.exe //LD //Fe:always-return-true-in-the-wlan-comm-id-check.dll plugin.c
+            cl.exe //LD //Fe:skip-hle-nwm-wlan-comm-id-check.dll plugin.c
           else
-            gcc plugin.c -shared -o always-return-true-in-the-wlan-comm-id-check.so
+            gcc plugin.c -shared -o skip-hle-nwm-wlan-comm-id-check.so
           fi
-      - name: Prepare to upload
-        if: github.event_name == 'push'
+      - name: Prepare to upload artifact
         shell: bash
         run: |
           cd $GITHUB_WORKSPACE
-          export VERSION=${GITHUB_REF:10}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          mkdir artifact
           if [ "$RUNNER_OS" == "Windows" ]; then
-            7z a vvctre-plugin-always-return-true-in-the-wlan-comm-id-check-$VERSION-${{runner.os}}.7z always-return-true-in-the-wlan-comm-id-check.dll license.txt
+            cp skip-hle-nwm-wlan-comm-id-check.dll artifact/
           else
-            7z a vvctre-plugin-always-return-true-in-the-wlan-comm-id-check-$VERSION-${{runner.os}}.7z always-return-true-in-the-wlan-comm-id-check.so license.txt
+            cp skip-hle-nwm-wlan-comm-id-check.so artifact/
           fi
-      - name: Upload to GitHub Releases
-        if: github.event_name == 'push'
-        uses: svenstaro/upload-release-action@v1-release
-        with:
-          repo_token: ${{secrets.GITHUB_TOKEN}}
-          file: vvctre-plugin-always-return-true-in-the-wlan-comm-id-check-${{env.VERSION}}-${{runner.os}}.7z
-          asset_name: vvctre-plugin-always-return-true-in-the-wlan-comm-id-check-${{env.VERSION}}-${{runner.os}}.7z
-          tag: ${{github.ref}}
-          overwrite: true
+          cp license.txt artifact/
       - name: Upload artifact
-        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v1
         with:
-          name: vvctre-plugin-always-return-true-in-the-wlan-comm-id-check-${{runner.os}}
-          path: .
+          name: ${{matrix.name}}
+          path: artifact
+  release:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/download-artifact@v2
+      - name: Set version output, create 7z files, and create zip files
+        id: step3
+        run: |
+          version=${GITHUB_REF:10}
+          echo "::set-output name=version::$version"
+
+          cd windows
+          7z a vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-$version-windows.7z skip-hle-nwm-wlan-comm-id-check.dll license.txt
+          7z a vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-$version-windows.zip skip-hle-nwm-wlan-comm-id-check.dll license.txt
+
+          cd ../linux
+          7z a vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-$version-linux.7z skip-hle-nwm-wlan-comm-id-check.so license.txt
+          7z a vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-$version-linux.zip skip-hle-nwm-wlan-comm-id-check.so license.txt
+      - name: Set commit_body output
+        id: step4
+        uses: actions/github-script@v3
+        with:
+          script: |
+            const child_process = require('child_process')
+            const commitBody = child_process.execSync('git log -1 --pretty="%b"', { cwd: process.env.GITHUB_WORKSPACE, encoding: 'utf8' })
+            core.setOutput('commit_body', commitBody.slice(0, -1))
+      - id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          tag_name: ${{github.ref}}
+          release_name: ${{steps.step3.outputs.version}}
+          body: ${{steps.step4.outputs.commit_body}}
+          draft: false
+          prerelease: false
+      - name: Upload Windows 7z
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: ./windows/vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-${{steps.step3.outputs.version}}-windows.7z
+          asset_name: vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-${{steps.step3.outputs.version}}-windows.7z
+          asset_content_type: application/x-7z-compressed
+      - name: Upload Windows zip
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: ./windows/vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-${{steps.step3.outputs.version}}-windows.zip
+          asset_name: vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-${{steps.step3.outputs.version}}-windows.zip
+          asset_content_type: application/zip
+      - name: Upload Linux 7z
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: ./linux/vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-${{steps.step3.outputs.version}}-linux.7z
+          asset_name: vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-${{steps.step3.outputs.version}}-linux.7z
+          asset_content_type: application/x-7z-compressed
+      - name: Upload Linux zip
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: ./linux/vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-${{steps.step3.outputs.version}}-linux.zip
+          asset_name: vvctre-plugin-skip-hle-nwm-wlan-comm-id-check-${{steps.step3.outputs.version}}-linux.zip
+          asset_content_type: application/zip
